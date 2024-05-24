@@ -19,7 +19,7 @@ func (rwsc *ResponseWriter) WriteHeader(code int) {
     rwsc.ResponseWriter.WriteHeader(code)
 }
 
-func WithLogger(next *RequestHandler) RequestHandler {
+func Logger(next *RequestHandler) RequestHandler {
 	return func (res http.ResponseWriter, req *http.Request)  {
 		fmt.Printf("--> %s %s\n", req.Method, req.URL)
 		start := time.Now()

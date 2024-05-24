@@ -16,14 +16,14 @@ func main()  {
 	handlers.Cart {
         Prefix: "/basket",
         Middlewares: &[]middlewares.Middleware{
-            middlewares.WithLogger,
+            middlewares.Logger,
             middlewares.Authorize,
         }}.Handle(mux)
 
 	handlers.User {
         Prefix: "/user",
         Middlewares: &[]middlewares.Middleware{
-            middlewares.WithLogger,
+            middlewares.Logger,
         },
     }.Handle(mux)
 
