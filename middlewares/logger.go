@@ -23,7 +23,7 @@ func Logger(next *RequestHandler) RequestHandler {
 	return func (res http.ResponseWriter, req *http.Request)  {
 		fmt.Printf("--> %s %s\n", req.Method, req.URL)
 		start := time.Now()
-        responseWriter := &ResponseWriter { res, 0 }
+        responseWriter := &ResponseWriter { res, 200 }
         if next != nil {
             (*next)(responseWriter, req)
         }
