@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+    "crypto/subtle"
 
 	"github.com/rohhamh/go-shopping-cart-crud/config"
 	"github.com/rohhamh/go-shopping-cart-crud/database"
@@ -108,13 +109,21 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
 	err := json.NewDecoder(req.Body).Decode(&user)
 	if err != nil {
 		res.WriteHeader(http.StatusBadRequest)
+		res.Write([]byte("Invalid body"))
 		return
 	}
+
+    user.Email = strings.TrimSpace(user.Email)
+    if user.Email == "" || user.Password == "" {
+        res.WriteHeader(http.StatusBadRequest)
+        return
+    }
 
 	dbUser := model.User{}
 	db := database.Connection()
     query := db.Where("email = ?", user.Email).Find(&dbUser)
     if query.RowsAffected <= 0 {
+        fmt.Printf("email %s not found\n", user.Email)
 		res.WriteHeader(http.StatusForbidden)
         return
     }
@@ -141,30 +150,35 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
 	var time uint32
 	var memory uint32
 	var threads uint8
-    _, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", memory, time, threads)
+    _, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
     if err != nil {
+        fmt.Printf("reading argon parameters failed for user %s, error: %v\n", user.Email, err)
 		res.WriteHeader(http.StatusForbidden)
 		return
     }
 
 	salt, err := base64.RawStdEncoding.Strict().DecodeString(vals[4])
     if err != nil {
+        fmt.Printf("salt b64 decode failed for user %s, error: %v\n", user.Email, err)
 		res.WriteHeader(http.StatusForbidden)
 		return
     }
-	saltLength := uint32(len(salt))
 
-	hash, err := base64.RawStdEncoding.Strict().DecodeString(vals[5])
+	dbPassword, err := base64.RawStdEncoding.Strict().DecodeString(vals[5])
     if err != nil {
+        fmt.Printf("password b64 decode failed for user %s, error: %v\n", user.Email, err)
 		res.WriteHeader(http.StatusForbidden)
 		return
     }
-	keyLength := uint32(len(hash))
+	keyLength := uint32(len(dbPassword))
 
-	insertion := db.Create(&dbUser)
-	if insertion.Error != nil {
-		res.WriteHeader(http.StatusInternalServerError)
+    reqPassword := argon2.IDKey([]byte(user.Password), salt, time, memory, threads, keyLength)
+
+    if subtle.ConstantTimeCompare(reqPassword, dbPassword) == 0 {
+        fmt.Printf("bad password for user %s\n", user.Email)
+        res.WriteHeader(http.StatusForbidden)
         return
-	}
-	res.WriteHeader(http.StatusCreated)
+    }
+
+	res.WriteHeader(http.StatusOK)
 }
