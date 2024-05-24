@@ -1,4 +1,4 @@
-package handlers
+package middlewares
 
 import (
 	"fmt"
@@ -6,13 +6,16 @@ import (
 	"time"
 )
 
-type requestHandler func (http.ResponseWriter, *http.Request)
+type RequestHandler func (http.ResponseWriter, *http.Request)
+type Middleware func (*RequestHandler) RequestHandler
 
-func WithLogger(httpHandler requestHandler) requestHandler {
+func WithLogger(next *RequestHandler) RequestHandler {
 	return func (res http.ResponseWriter, req *http.Request)  {
 		fmt.Printf("--> %s %s\n", req.Method, req.URL)
 		start := time.Now()
-		httpHandler(res, req)
+        if next != nil {
+            (*next)(res, req)
+        }
 		fmt.Printf("<-- %s %s %dms\n", req.Method, req.URL, time.Since(start).Milliseconds())
 	}
 }

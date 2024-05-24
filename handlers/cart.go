@@ -8,11 +8,13 @@ import (
 
 	"github.com/rohhamh/go-shopping-cart-crud/database"
 	"github.com/rohhamh/go-shopping-cart-crud/model"
-	"github.com/rohhamh/go-shopping-cart-crud/utils/handlers"
+	"github.com/rohhamh/go-shopping-cart-crud/middlewares"
+	middlewareUtils "github.com/rohhamh/go-shopping-cart-crud/utils/middlewares"
 )
 
 type Cart struct {
-	Prefix	string
+	Prefix	        string
+    Middlewares     *[]middlewares.Middleware
 }
 
 type CartRequest struct {
@@ -22,14 +24,15 @@ type CartRequest struct {
 var CartRequestHandler CartRequest
 
 func (c Cart) Handle(mux *http.ServeMux) {
+    var basketRoutes middlewares.RequestHandler = CartRequestHandler.Basket
 	mux.HandleFunc(
 		fmt.Sprintf("%s", c.Prefix),
-		handlers.WithLogger(CartRequestHandler.Basket),
+		middlewareUtils.Chain(c.Middlewares, &basketRoutes),
 	)
-	mux.HandleFunc(
-		fmt.Sprintf("%s/{id}", c.Prefix),
-		handlers.WithLogger(CartRequestHandler.Get),
-	)
+	// mux.HandleFunc(
+	// 	fmt.Sprintf("%s/{id}", c.Prefix),
+	// 	middlewareUtils.Chain(c.Middlewares, CartRequestHandler.Get),
+	// )
 }
 
 func (cr CartRequest) Basket (res http.ResponseWriter, req *http.Request) {

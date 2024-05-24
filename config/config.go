@@ -11,3 +11,5 @@ var PasswordTime uint32 = 1
 var PasswordMemory uint32 = 64*1024
 var PasswordThreads uint8 = 4
 var PasswordKeyLen uint32 = 32
+
+var JWTKey = []byte("65nBbH^4A!VFNpAj")

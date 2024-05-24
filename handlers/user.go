@@ -2,24 +2,29 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
-    "crypto/subtle"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/rohhamh/go-shopping-cart-crud/config"
 	"github.com/rohhamh/go-shopping-cart-crud/database"
 	"github.com/rohhamh/go-shopping-cart-crud/model"
-	"github.com/rohhamh/go-shopping-cart-crud/utils/handlers"
+	middlewareUtils "github.com/rohhamh/go-shopping-cart-crud/utils/middlewares"
+	"github.com/rohhamh/go-shopping-cart-crud/middlewares"
+	JWTUtil "github.com/rohhamh/go-shopping-cart-crud/utils/jwt"
 	"golang.org/x/crypto/argon2"
 	// "gopkg.in/validator.v2"
 )
 
 type User struct {
-	Prefix	string
+	Prefix	    string
+    Middlewares *[]middlewares.Middleware
 }
 
 type UserRequest struct {
@@ -29,14 +34,20 @@ type UserRequest struct {
 }
 var UserRequestHandler UserRequest
 
+type UserJWTClaims struct {
+    jwt.RegisteredClaims
+}
+
 func (u User) Handle(mux *http.ServeMux) {
+    var userCreate middlewares.RequestHandler = UserRequestHandler.Create
+    var userLogin middlewares.RequestHandler = UserRequestHandler.Login
 	mux.HandleFunc(
 		fmt.Sprintf("%s", u.Prefix),
-		handlers.WithLogger(UserRequestHandler.Create),
+		middlewareUtils.Chain(nil, &userCreate),
 	)
 	mux.HandleFunc(
 		fmt.Sprintf("%s/login", u.Prefix),
-		handlers.WithLogger(UserRequestHandler.Login),
+		middlewareUtils.Chain(nil, &userLogin),
 	)
 }
 
@@ -147,10 +158,10 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
 		return
     }
 
-	var time uint32
+	var passTimes uint32
 	var memory uint32
 	var threads uint8
-    _, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &memory, &time, &threads)
+    _, err = fmt.Sscanf(vals[3], "m=%d,t=%d,p=%d", &memory, &passTimes, &threads)
     if err != nil {
         fmt.Printf("reading argon parameters failed for user %s, error: %v\n", user.Email, err)
 		res.WriteHeader(http.StatusForbidden)
@@ -172,7 +183,7 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
     }
 	keyLength := uint32(len(dbPassword))
 
-    reqPassword := argon2.IDKey([]byte(user.Password), salt, time, memory, threads, keyLength)
+    reqPassword := argon2.IDKey([]byte(user.Password), salt, passTimes, memory, threads, keyLength)
 
     if subtle.ConstantTimeCompare(reqPassword, dbPassword) == 0 {
         fmt.Printf("bad password for user %s\n", user.Email)
@@ -180,5 +191,26 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
         return
     }
 
-	res.WriteHeader(http.StatusOK)
+    res.WriteHeader(http.StatusOK)
+    expiry := time.Now().Add(24 * time.Hour)
+    jwtString := JWTUtil.SignToken(UserJWTClaims{
+        RegisteredClaims: jwt.RegisteredClaims {
+            ExpiresAt: jwt.NewNumericDate(expiry),
+            IssuedAt:  jwt.NewNumericDate(time.Now()),
+            NotBefore: jwt.NewNumericDate(time.Now()),
+            Issuer:    "Shopping Cart API",
+            Subject:   dbUser.Email,
+            ID:        fmt.Sprintf("%d|%d", dbUser.ID, time.Now().UnixMicro()),
+        },
+    })
+    cookie := http.Cookie{
+        Name: "jwt",
+        Value: jwtString,
+        Path: "/",
+        Secure: true,
+        Expires: expiry,
+        HttpOnly: true,
+    }
+    http.SetCookie(res, &cookie)
+    res.Write([]byte(jwtString))
 }
