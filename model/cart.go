@@ -6,7 +6,7 @@ import (
 )
 
 type Cart struct {
-    ID			int64           `gorm:"primaryKey" json:"-"`
+    ID			int64           `gorm:"primaryKey"`
     CreatedAt	time.Time
     UpdatedAt	time.Time
     Data		datatypes.JSON

@@ -43,11 +43,11 @@ func (u User) Handle(mux *http.ServeMux) {
     var userLogin middlewares.RequestHandler = UserRequestHandler.Login
 	mux.HandleFunc(
 		fmt.Sprintf("%s", u.Prefix),
-		middlewareUtils.Chain(nil, &userCreate),
+		middlewareUtils.Chain(u.Middlewares, &userCreate),
 	)
 	mux.HandleFunc(
 		fmt.Sprintf("%s/login", u.Prefix),
-		middlewareUtils.Chain(nil, &userLogin),
+		middlewareUtils.Chain(u.Middlewares, &userLogin),
 	)
 }
 
@@ -191,13 +191,14 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
         return
     }
 
-    res.WriteHeader(http.StatusOK)
-    expiry := time.Now().Add(24 * time.Hour)
+    maxAge := 10 * time.Minute
+    now := time.Now()
+    expiryTime := now.Add(maxAge)
     jwtString := JWTUtil.SignToken(UserJWTClaims{
         RegisteredClaims: jwt.RegisteredClaims {
-            ExpiresAt: jwt.NewNumericDate(expiry),
-            IssuedAt:  jwt.NewNumericDate(time.Now()),
-            NotBefore: jwt.NewNumericDate(time.Now()),
+            ExpiresAt: jwt.NewNumericDate(expiryTime),
+            IssuedAt:  jwt.NewNumericDate(now),
+            NotBefore: jwt.NewNumericDate(now),
             Issuer:    "Shopping Cart API",
             Subject:   dbUser.Email,
             ID:        fmt.Sprintf("%d|%d", dbUser.ID, time.Now().UnixMicro()),
@@ -208,9 +209,9 @@ func (urh UserRequest) Login(res http.ResponseWriter, req *http.Request) {
         Value: jwtString,
         Path: "/",
         Secure: true,
-        Expires: expiry,
+        Expires: expiryTime,
+        MaxAge: int(maxAge.Seconds()),
         HttpOnly: true,
     }
     http.SetCookie(res, &cookie)
-    res.Write([]byte(jwtString))
 }

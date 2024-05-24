@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/rohhamh/go-shopping-cart-crud/database"
-	"github.com/rohhamh/go-shopping-cart-crud/model"
 	"github.com/rohhamh/go-shopping-cart-crud/middlewares"
+	"github.com/rohhamh/go-shopping-cart-crud/model"
 	middlewareUtils "github.com/rohhamh/go-shopping-cart-crud/utils/middlewares"
+	"gorm.io/datatypes"
 )
 
 type Cart struct {
@@ -18,21 +20,22 @@ type Cart struct {
 }
 
 type CartRequest struct {
-    Data		string
+    Data		datatypes.JSON
     State       string
 }
 var CartRequestHandler CartRequest
 
 func (c Cart) Handle(mux *http.ServeMux) {
     var basketRoutes middlewares.RequestHandler = CartRequestHandler.Basket
+    var getRoute     middlewares.RequestHandler = CartRequestHandler.Get
 	mux.HandleFunc(
 		fmt.Sprintf("%s", c.Prefix),
 		middlewareUtils.Chain(c.Middlewares, &basketRoutes),
 	)
-	// mux.HandleFunc(
-	// 	fmt.Sprintf("%s/{id}", c.Prefix),
-	// 	middlewareUtils.Chain(c.Middlewares, CartRequestHandler.Get),
-	// )
+	mux.HandleFunc(
+		fmt.Sprintf("%s/{id}", c.Prefix),
+		middlewareUtils.Chain(c.Middlewares, &getRoute),
+	)
 }
 
 func (cr CartRequest) Basket (res http.ResponseWriter, req *http.Request) {
@@ -43,10 +46,11 @@ func (cr CartRequest) Basket (res http.ResponseWriter, req *http.Request) {
 	}
 }
 func (cr CartRequest) GetAll (res http.ResponseWriter, req *http.Request) {
-
 	db := database.Connection()
 	carts := []model.Cart{}
-	db.Find(&carts)
+    user := req.Context().Value("user").(model.User)
+
+	db.Where("user_id = ?", user.ID).Find(&carts)
 
 	sampleCart, err := json.Marshal(carts)
 	if err != nil {
@@ -65,11 +69,20 @@ func (cr CartRequest) Get (res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	id := strings.Split(req.URL.Path, "/")[2]
-
 	cart := model.Cart{}
+    cart.User = req.Context().Value("user").(model.User)
+    idStr := strings.Split(req.URL.Path, "/")[2]
+	id, err := strconv.Atoi(idStr)
+    if err != nil {
+        fmt.Printf("got invalid id %s from user %d\n", idStr, cart.User.ID)
+        res.WriteHeader(http.StatusBadRequest)
+        return
+    }
+    cart.ID = int64(id)
+
+
 	db := database.Connection()
-	query := db.Find(&cart, id)
+	query := db.Where("user_id = ?", cart.User.ID).Find(&cart)
 	if query.RowsAffected == 0 {
 		res.WriteHeader(http.StatusNotFound)
 		return
@@ -89,18 +102,23 @@ func (cr CartRequest) Create (res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	cart := model.Cart{}
-	err := json.NewDecoder(req.Body).Decode(&cart)
+	cartRequest := CartRequest{}
+	err := json.NewDecoder(req.Body).Decode(&cartRequest)
 	if err != nil {
 		res.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	fmt.Printf("cart %+v\n", cart)
+
+    cart := model.Cart {
+        Data:   cartRequest.Data,
+        State:  cartRequest.State,
+    }
+    cart.User = req.Context().Value("user").(model.User)
 
 	db := database.Connection()
 	query := db.Create(&cart)
 	if query.Error != nil {
-		fmt.Printf("err %+v", query.Error)
+		fmt.Printf("err %+v\n", query.Error)
 		res.WriteHeader(http.StatusInternalServerError)
 		return
 	}

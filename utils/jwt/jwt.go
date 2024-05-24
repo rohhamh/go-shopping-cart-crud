@@ -15,3 +15,10 @@ func SignToken(claim jwt.Claims) string {
     }
     return s
 }
+
+func ValidateToken(tokenString string) (*jwt.Token, error) {
+    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+        return []byte(config.JWTKey), nil
+    })
+    return token, err
+}
