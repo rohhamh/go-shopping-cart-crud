@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	// "fmt"
 	"reflect"
 	"runtime"
 	"slices"
@@ -23,5 +24,12 @@ func Chain (middlewaresChain *[]middlewares.Middleware, handler *middlewares.Req
         finalHandler = &middlewareHandler
         middlewaresHandlers = append(middlewaresHandlers, *finalHandler)
     }
+    slices.Reverse(*middlewaresChain)
+
+    // // fmt.Printf("handlers for %s: with chain %v\n", GetFunctionName(*handler), *middlewaresChain)
+    // for _, mid := range middlewaresHandlers {
+    //     fmt.Printf("\t%v %s\n", mid, GetFunctionName(mid))
+    // }
+    // fmt.Println()
     return *finalHandler
 }

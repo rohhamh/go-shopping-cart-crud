@@ -20,6 +20,7 @@ func Authorize(next *RequestHandler) RequestHandler {
 
         token, err := jwt.ValidateToken(jwtCookie.Value)
         if err != nil || !token.Valid {
+            fmt.Printf("invalid token %v\n", err)
             res.WriteHeader(http.StatusForbidden)
             return
         }
